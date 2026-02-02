@@ -1,0 +1,2168 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+  <title>CREPUSCOLO</title>
+  <style>
+    html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#d6d0c6;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    #uiRoot{position:fixed;inset:0;pointer-events:none}
+    #menu{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(1200px 800px at 50% 40%, rgba(15,14,18,.92), rgba(0,0,0,.98));backdrop-filter:blur(8px);pointer-events:auto}
+    #menuCard{width:min(760px,92vw);padding:28px 26px 22px;border-radius:18px;background:linear-gradient(180deg, rgba(22,20,28,.90), rgba(8,8,10,.92));box-shadow:0 30px 120px rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.08)}
+    #titleRow{display:flex;gap:16px;align-items:flex-start;justify-content:space-between}
+    #gameTitle{letter-spacing:.22em;text-transform:uppercase;font-weight:700;font-size:20px;opacity:.92}
+    #subTitle{margin-top:8px;line-height:1.55;opacity:.86;font-size:13px;max-width:56ch}
+    #moonSigil{width:44px;height:44px;border-radius:14px;display:grid;place-items:center;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);cursor:pointer;user-select:none}
+    #moonSigil:hover{background:rgba(255,255,255,.09)}
+    .btnRow{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+    .btn{padding:12px 14px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:#e9e4db;cursor:pointer;font-weight:650;letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+    .btn:hover{background:rgba(255,255,255,.09)}
+    .btn:active{transform:translateY(1px)}
+    .smallRow{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;opacity:.85}
+    .label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;opacity:.78}
+    input[type="range"]{width:220px}
+    #hint{margin-top:14px;opacity:.7;font-size:12px;line-height:1.45}
+    #egg{margin-top:12px;opacity:0;transform:translateY(6px);transition:opacity .6s ease, transform .6s ease;font-size:12px;letter-spacing:.12em;text-transform:uppercase}
+    #egg.show{opacity:.95;transform:translateY(0)}
+    #hud{position:fixed;left:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;pointer-events:none;opacity:0;transition:opacity .6s ease}
+    #hud.show{opacity:1}
+    #staminaWrap{width:240px;height:10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.22);overflow:hidden}
+    #staminaFill{height:100%;width:100%;background:linear-gradient(90deg, rgba(232,226,214,.92), rgba(140,160,190,.62))}
+    #whisper{position:fixed;right:18px;bottom:18px;max-width:42ch;opacity:0;transition:opacity .8s ease;pointer-events:none;font-size:12px;line-height:1.5;color:rgba(220,214,202,.86);text-shadow:0 2px 20px rgba(0,0,0,.8)}
+    #whisper.show{opacity:1}
+    #fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .9s ease}
+    #fade.on{opacity:1}
+    canvas{display:block}
+  </style>
+</head>
+<body>
+  <div id="menu">
+    <div id="menuCard">
+      <div id="titleRow">
+        <div>
+          <div id="gameTitle">CREPUSCOLO</div>
+          <div id="subTitle">
+            Non sei arrivato in tempo. La luna ricorda tutto. Cammina piano: qui le rovine ascoltano, e ciò che non guardi cambia.
+          </div>
+        </div>
+        <div id="moonSigil" title="Non fissarla troppo a lungo">☾</div>
+      </div>
+
+      <div class="btnRow">
+        <button class="btn" id="btnNew">Nuova Eco</button>
+        <button class="btn" id="btnContinue">Continua</button>
+        <button class="btn" id="btnSettings">Impostazioni</button>
+        <button class="btn" id="btnCredits">Silenzio</button>
+      </div>
+
+      <div class="smallRow" id="settingsRow" style="display:none">
+        <div class="label">Qualità</div>
+        <input id="quality" type="range" min="0" max="100" value="85">
+        <div class="label" id="qualityLabel">ULTRA</div>
+        <div style="flex:1"></div>
+        <div class="label">Mouse</div>
+        <input id="sens" type="range" min="10" max="140" value="75">
+        <div class="label" id="sensLabel">0.75</div>
+      </div>
+
+      <div id="hint">
+        WASD muovi · Shift corri · Ctrl abbassati · Spazio salta · Click attacco · Tasto destro parata · E interagisci · M monta/smonta (se trovi un cavallo) · T fissare la luna
+      </div>
+
+      <div id="egg">ciotola24 never dies</div>
+    </div>
+  </div>
+
+  <div id="uiRoot">
+    <div id="hud">
+      <div id="staminaWrap"><div id="staminaFill"></div></div>
+    </div>
+    <div id="whisper"></div>
+    <div id="fade"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js'
+    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/controls/PointerLockControls.js'
+    import { EffectComposer } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/EffectComposer.js'
+    import { RenderPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/RenderPass.js'
+    import { UnrealBloomPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/UnrealBloomPass.js'
+    import { FilmPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/FilmPass.js'
+    import { BokehPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/BokehPass.js'
+    import { ShaderPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/ShaderPass.js'
+    import { VignetteShader } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/shaders/VignetteShader.js'
+    import { OutputPass } from 'https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/postprocessing/OutputPass.js'
+    import * as CANNON from 'https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js'
+    import SimplexNoise from 'https://cdn.jsdelivr.net/npm/simplex-noise@4.0.1/dist/esm/simplex-noise.js'
+
+    const $ = (q)=>document.querySelector(q)
+    const menu = $('#menu')
+    const settingsRow = $('#settingsRow')
+    const quality = $('#quality')
+    const qualityLabel = $('#qualityLabel')
+    const sens = $('#sens')
+    const sensLabel = $('#sensLabel')
+    const egg = $('#egg')
+    const moonSigil = $('#moonSigil')
+    const hud = $('#hud')
+    const staminaFill = $('#staminaFill')
+    const whisperEl = $('#whisper')
+    const fade = $('#fade')
+
+    const STATE = {
+      running:false,
+      paused:true,
+      quality:0.85,
+      sens:0.75,
+      seed:0,
+      worldShift:0,
+      hasSave:false,
+      lastWhisperAt:0,
+      whisperCool:5.5,
+      staredMoonSec:0,
+      facelessTriggered:false
+    }
+
+    const clamp = (v,a,b)=>Math.max(a,Math.min(b,v))
+    const lerp = (a,b,t)=>a+(b-a)*t
+    const smoothstep = (a,b,t)=>{ t=clamp((t-a)/(b-a),0,1); return t*t*(3-2*t) }
+
+    function mulberry32(seed){
+      let t = seed >>> 0
+      return function(){
+        t += 0x6D2B79F5
+        let r = Math.imul(t ^ (t >>> 15), 1 | t)
+        r ^= r + Math.imul(r ^ (r >>> 7), 61 | r)
+        return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+      }
+    }
+
+    function nowSec(){ return performance.now()/1000 }
+
+    function pickQualityLabel(x){
+      if(x>=0.85) return 'ULTRA'
+      if(x>=0.66) return 'ALTA'
+      if(x>=0.46) return 'MEDIA'
+      return 'BASSA'
+    }
+
+    function applyUI(){
+      STATE.quality = clamp(parseInt(quality.value,10)/100,0.2,1)
+      qualityLabel.textContent = pickQualityLabel(STATE.quality)
+      STATE.sens = clamp(parseInt(sens.value,10)/100,0.1,1.4)
+      sensLabel.textContent = STATE.sens.toFixed(2)
+    }
+
+    quality.addEventListener('input', applyUI)
+    sens.addEventListener('input', applyUI)
+
+    function showEgg(){
+      egg.classList.add('show')
+      setTimeout(()=>egg.classList.remove('show'), 5200)
+    }
+
+    let eggArmed = false
+    moonSigil.addEventListener('click', ()=>{
+      eggArmed = !eggArmed
+      if(eggArmed) showEgg()
+    })
+
+    $('#btnSettings').addEventListener('click', ()=>{
+      settingsRow.style.display = settingsRow.style.display==='none' ? 'flex' : 'none'
+    })
+
+    $('#btnCredits').addEventListener('click', ()=>{
+      whisper('Qui non c’è redenzione. Solo eco.')
+      showEgg()
+    })
+
+    $('#btnNew').addEventListener('click', ()=>{
+      clearSave()
+      startGame(true)
+    })
+
+    $('#btnContinue').addEventListener('click', ()=>{
+      startGame(false)
+    })
+
+    function saveKey(){ return 'crepuscolo_save_v3' }
+
+    function loadSave(){
+      try{
+        const raw = localStorage.getItem(saveKey())
+        if(!raw) return null
+        const s = JSON.parse(raw)
+        if(!s) return null
+        return s
+      }catch(e){
+        return null
+      }
+    }
+
+    function writeSave(s){
+      try{
+        localStorage.setItem(saveKey(), JSON.stringify(s))
+      }catch(e){}
+    }
+
+    function clearSave(){
+      try{ localStorage.removeItem(saveKey()) }catch(e){}
+      STATE.hasSave = false
+    }
+
+    function whisper(text, hold=4.2){
+      whisperEl.textContent = text
+      whisperEl.classList.add('show')
+      setTimeout(()=>whisperEl.classList.remove('show'), hold*1000)
+    }
+
+    function fadeToBlack(on){
+      if(on) fade.classList.add('on')
+      else fade.classList.remove('on')
+    }
+
+    let renderer, scene, camera, composer, controls
+    let world, player, audioSys
+    let clock = new THREE.Clock()
+
+    class AudioSystem{
+      constructor(){
+        this.ctx = null
+        this.master = null
+        this.wind = null
+        this.low = null
+        this.wh = null
+        this.started = false
+        this.lastFoot = 0
+      }
+      start(){
+        if(this.started) return
+        this.started = true
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)()
+        this.master = this.ctx.createGain()
+        this.master.gain.value = 0.62
+        this.master.connect(this.ctx.destination)
+
+        const wind = this.ctx.createBufferSource()
+        wind.buffer = this.noiseBuffer(2.0)
+        wind.loop = true
+
+        const bp = this.ctx.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = 280
+        bp.Q.value = 0.9
+
+        const lp = this.ctx.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = 900
+        lp.Q.value = 0.6
+
+        const wg = this.ctx.createGain()
+        wg.gain.value = 0.18
+
+        wind.connect(bp)
+        bp.connect(lp)
+        lp.connect(wg)
+        wg.connect(this.master)
+        wind.start()
+
+        this.wind = { wind, bp, lp, wg }
+
+        const low = this.ctx.createOscillator()
+        low.type = 'sine'
+        low.frequency.value = 36
+        const lg = this.ctx.createGain()
+        lg.gain.value = 0.03
+        low.connect(lg)
+        lg.connect(this.master)
+        low.start()
+        this.low = { low, lg }
+
+        this.wh = { nextAt: nowSec()+3.4 }
+      }
+      noiseBuffer(seconds){
+        const rate = 44100
+        const len = Math.floor(rate*seconds)
+        const buf = this.ctx.createBuffer(1, len, rate)
+        const data = buf.getChannelData(0)
+        let x1=0, x2=0
+        for(let i=0;i<len;i++){
+          const white = Math.random()*2-1
+          x1 = 0.997*x1 + 0.05*white
+          x2 = 0.985*x2 + 0.10*white
+          data[i] = (x1 + x2)*0.5
+        }
+        return buf
+      }
+      step(dt, playerSpeed, staredMoon){
+        if(!this.ctx) return
+        const t = nowSec()
+        const w = this.wind
+        const sway = 0.5 + 0.5*Math.sin(t*0.13)
+        w.bp.frequency.value = lerp(220, 360, sway)
+        w.lp.frequency.value = lerp(620, 1200, 0.5+0.5*Math.sin(t*0.07))
+        w.wg.gain.value = lerp(0.12, 0.22, smoothstep(0,1,playerSpeed/6))
+
+        const dread = clamp(staredMoon/6,0,1)
+        this.low.lg.gain.value = lerp(0.02, 0.06, dread)
+
+        if(t > this.wh.nextAt && dread>0.12){
+          this.wh.nextAt = t + lerp(6.0, 14.0, Math.random())
+          this.spawnWhisper(lerp(0.12, 0.42, dread))
+        }
+      }
+      spawnWhisper(amount){
+        const src = this.ctx.createBufferSource()
+        src.buffer = this.noiseBuffer(0.85)
+        const bp = this.ctx.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = lerp(480, 1200, Math.random())
+        bp.Q.value = lerp(3.0, 10.0, Math.random())
+        const hp = this.ctx.createBiquadFilter()
+        hp.type = 'highpass'
+        hp.frequency.value = 260
+        const g = this.ctx.createGain()
+        g.gain.value = amount
+        src.connect(hp)
+        hp.connect(bp)
+        bp.connect(g)
+        g.connect(this.master)
+        src.start()
+      }
+      oneShotMetal(){
+        if(!this.ctx) return
+        const t = this.ctx.currentTime
+        const o = this.ctx.createOscillator()
+        o.type = 'triangle'
+        o.frequency.setValueAtTime(820, t)
+        o.frequency.exponentialRampToValueAtTime(220, t+0.12)
+        const g = this.ctx.createGain()
+        g.gain.setValueAtTime(0.0, t)
+        g.gain.linearRampToValueAtTime(0.12, t+0.01)
+        g.gain.exponentialRampToValueAtTime(0.0001, t+0.22)
+        const bp = this.ctx.createBiquadFilter()
+        bp.type = 'bandpass'
+        bp.frequency.value = 1200
+        bp.Q.value = 6.5
+        o.connect(bp)
+        bp.connect(g)
+        g.connect(this.master)
+        o.start(t)
+        o.stop(t+0.25)
+      }
+      footstep(intensity){
+        if(!this.ctx) return
+        const t = nowSec()
+        if(t - this.lastFoot < 0.22) return
+        this.lastFoot = t
+        const src = this.ctx.createBufferSource()
+        src.buffer = this.noiseBuffer(0.2)
+        const lp = this.ctx.createBiquadFilter()
+        lp.type = 'lowpass'
+        lp.frequency.value = lerp(260, 520, intensity)
+        const g = this.ctx.createGain()
+        g.gain.value = lerp(0.02, 0.08, intensity)
+        src.connect(lp)
+        lp.connect(g)
+        g.connect(this.master)
+        src.start()
+      }
+    }
+
+    class World{
+      constructor(seed, shift){
+        this.seed = seed
+        this.shift = shift
+        this.rng = mulberry32(seed + shift*1337)
+        this.simplex = new SimplexNoise(()=>this.rng())
+        this.moonDir = new THREE.Vector3(-0.42, 0.86, -0.28).normalize()
+        this.terrainSize = 220
+        this.terrainSeg = 180
+        this.terrain = null
+        this.terrainBody = null
+        this.instances = []
+        this.interactables = []
+        this.zones = []
+        this.bosses = []
+        this.faceless = null
+        this.villagePulse = 0
+      }
+      heightAt(x,z){
+        const s = 0.012
+        let h = 0
+        let a = 1
+        let f = 1
+        for(let i=0;i<5;i++){
+          h += a * this.simplex.noise2D(x*s*f, z*s*f)
+          a *= 0.55
+          f *= 2.02
+        }
+        const ridge = 1 - Math.abs(this.simplex.noise2D(x*s*0.8, z*s*0.8))
+        h += ridge*0.8
+        h *= 6.2
+        const basin = -2.4 * smoothstep(0, 1, Math.min(1, (Math.abs(x)+Math.abs(z))/260))
+        return h + basin
+      }
+      build(scene, physics){
+        scene.fog = new THREE.FogExp2(new THREE.Color(0x07070b), 0.010 + this.shift*0.0006)
+
+        const sky = new THREE.Color(0x05050a)
+        scene.background = sky
+
+        const hemi = new THREE.HemisphereLight(0x1a1f2a, 0x050508, 0.22)
+        scene.add(hemi)
+
+        const moonLight = new THREE.DirectionalLight(0xbdd3ff, 1.35)
+        moonLight.position.copy(this.moonDir).multiplyScalar(120)
+        moonLight.castShadow = true
+        moonLight.shadow.mapSize.set(2048,2048)
+        moonLight.shadow.camera.near = 10
+        moonLight.shadow.camera.far = 320
+        moonLight.shadow.camera.left = -95
+        moonLight.shadow.camera.right = 95
+        moonLight.shadow.camera.top = 95
+        moonLight.shadow.camera.bottom = -95
+        moonLight.shadow.bias = -0.0002
+        scene.add(moonLight)
+
+        const moonGeo = new THREE.SphereGeometry(18, 64, 64)
+        const moonTex = this.makeMoonTexture()
+        const moonMat = new THREE.MeshStandardMaterial({
+          map: moonTex,
+          roughness: 0.86,
+          metalness: 0.0,
+          emissive: new THREE.Color(0x9fb6ff),
+          emissiveIntensity: 0.48,
+          emissiveMap: moonTex
+        })
+        const moon = new THREE.Mesh(moonGeo, moonMat)
+        moon.position.copy(this.moonDir).multiplyScalar(160)
+        moon.renderOrder = 2
+        moon.frustumCulled = false
+        scene.add(moon)
+
+        this.buildTerrain(scene, physics)
+        this.buildLiminal(scene, physics)
+        this.buildGoblins(scene, physics)
+        this.buildBosses(scene, physics)
+        this.buildFaceless(scene, physics)
+
+        this.zones.push({ name:'fear', center:new THREE.Vector3(42,0,-34), r:18 })
+        this.zones.push({ name:'moonWatch', center:new THREE.Vector3(-10,0,-18), r:26 })
+      }
+      makeMoonTexture(){
+        const c = document.createElement('canvas')
+        c.width = 512
+        c.height = 512
+        const g = c.getContext('2d')
+        g.fillStyle = '#0b0c12'
+        g.fillRect(0,0,512,512)
+        const img = g.getImageData(0,0,512,512)
+        const d = img.data
+        const rng = this.rng
+        for(let y=0;y<512;y++){
+          for(let x=0;x<512;x++){
+            const i = (y*512+x)*4
+            const nx = (x/512)*2-1
+            const ny = (y/512)*2-1
+            const r2 = nx*nx+ny*ny
+            const v = r2<=1 ? Math.sqrt(1-r2) : 0
+            let n = 0
+            n += (rng()*2-1)*0.08
+            n += Math.sin((nx*6.2 + ny*2.4) * 3.1)*0.06
+            n += Math.sin((nx*12.0 - ny*7.0) * 1.9)*0.05
+            const crater = Math.pow(clamp(1 - Math.abs(Math.sin((nx*3.2+ny*2.1)*4.2)),0,1), 4)*0.18
+            const shade = clamp(0.32 + v*0.62 + n - crater, 0, 1)
+            const r = Math.floor(lerp(18, 190, shade))
+            const gg = Math.floor(lerp(18, 208, shade))
+            const b = Math.floor(lerp(30, 240, shade))
+            d[i+0]=r
+            d[i+1]=gg
+            d[i+2]=b
+            d[i+3]=255
+          }
+        }
+        g.putImageData(img,0,0)
+        const tex = new THREE.CanvasTexture(c)
+        tex.colorSpace = THREE.SRGBColorSpace
+        tex.anisotropy = 8
+        return tex
+      }
+      buildTerrain(scene, physics){
+        const size = this.terrainSize
+        const seg = this.terrainSeg
+        const geo = new THREE.PlaneGeometry(size, size, seg, seg)
+        geo.rotateX(-Math.PI/2)
+        const pos = geo.attributes.position
+        const heights = []
+        for(let z=0;z<=seg;z++){
+          const row = []
+          for(let x=0;x<=seg;x++){
+            const ix = x/(seg)*size - size/2
+            const iz = z/(seg)*size - size/2
+            const h = this.heightAt(ix, iz)
+            row.push(h)
+            const i = z*(seg+1)+x
+            pos.setY(i, h)
+          }
+          heights.push(row)
+        }
+        geo.computeVertexNormals()
+
+        const { albedo, normal, rough } = this.makeGroundTextures()
+        const mat = new THREE.MeshStandardMaterial({
+          map: albedo,
+          normalMap: normal,
+          roughnessMap: rough,
+          roughness: 1.0,
+          metalness: 0.0
+        })
+        const mesh = new THREE.Mesh(geo, mat)
+        mesh.receiveShadow = true
+        scene.add(mesh)
+        this.terrain = mesh
+
+        const hf = new CANNON.Heightfield(heights, { elementSize: size/seg })
+        const body = new CANNON.Body({ mass:0 })
+        body.addShape(hf, new CANNON.Vec3(-size/2, 0, -size/2))
+        body.quaternion.setFromEuler(-Math.PI/2, 0, 0, 'XYZ')
+        physics.addBody(body)
+        this.terrainBody = body
+      }
+      makeGroundTextures(){
+        const mk = (w,h)=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; return c }
+        const w=1024,h=1024
+        const ca = mk(w,h), cn = mk(w,h), cr = mk(w,h)
+        const ga = ca.getContext('2d')
+        const gn = cn.getContext('2d')
+        const gr = cr.getContext('2d')
+        const imgA = ga.getImageData(0,0,w,h)
+        const imgN = gn.getImageData(0,0,w,h)
+        const imgR = gr.getImageData(0,0,w,h)
+        const da = imgA.data, dn = imgN.data, dr = imgR.data
+
+        const rng = this.rng
+        const s = 0.010
+        const simplex = this.simplex
+
+        for(let y=0;y<h;y++){
+          for(let x=0;x<w;x++){
+            const i = (y*w+x)*4
+            const nx = (x/w)*2-1
+            const ny = (y/h)*2-1
+            let n = 0
+            let a=1,f=1
+            for(let k=0;k<6;k++){
+              n += a*simplex.noise2D(x*s*f, y*s*f)
+              a*=0.55
+              f*=2.03
+            }
+            const grit = (rng()*2-1)*0.09
+            const moss = clamp(0.5 + 0.5*simplex.noise2D(x*s*0.55, y*s*0.55),0,1)
+            const stone = clamp(0.5 + 0.5*n,0,1)
+            const base = lerp(0.12, 0.22, stone) + grit*0.35
+            const gcol = lerp(0.08, 0.18, moss)
+            const r = Math.floor(lerp(10, 52, base + gcol*0.25))
+            const gg = Math.floor(lerp(12, 62, base + gcol*0.34))
+            const b = Math.floor(lerp(14, 70, base + gcol*0.20))
+            da[i+0]=r
+            da[i+1]=gg
+            da[i+2]=b
+            da[i+3]=255
+
+            const eps = 1.0
+            const nL = simplex.noise2D((x-eps)*s*3.0, y*s*3.0)
+            const nR = simplex.noise2D((x+eps)*s*3.0, y*s*3.0)
+            const nD = simplex.noise2D(x*s*3.0, (y-eps)*s*3.0)
+            const nU = simplex.noise2D(x*s*3.0, (y+eps)*s*3.0)
+            const dx = (nR - nL)*0.85
+            const dy = (nU - nD)*0.85
+            const nz = 1.0
+            let lx = -dx, ly = -dy, lz = nz
+            const inv = 1/Math.sqrt(lx*lx+ly*ly+lz*lz)
+            lx*=inv; ly*=inv; lz*=inv
+            dn[i+0]=Math.floor((lx*0.5+0.5)*255)
+            dn[i+1]=Math.floor((ly*0.5+0.5)*255)
+            dn[i+2]=Math.floor((lz*0.5+0.5)*255)
+            dn[i+3]=255
+
+            const rgh = clamp(0.78 + (1-stone)*0.12 + Math.abs(grit)*0.10, 0, 1)
+            dr[i+0]=Math.floor(rgh*255)
+            dr[i+1]=Math.floor(rgh*255)
+            dr[i+2]=Math.floor(rgh*255)
+            dr[i+3]=255
+          }
+        }
+
+        ga.putImageData(imgA,0,0)
+        gn.putImageData(imgN,0,0)
+        gr.putImageData(imgR,0,0)
+
+        const albedo = new THREE.CanvasTexture(ca)
+        albedo.colorSpace = THREE.SRGBColorSpace
+        albedo.anisotropy = 12
+        albedo.wrapS = albedo.wrapT = THREE.RepeatWrapping
+        albedo.repeat.set(14,14)
+
+        const normal = new THREE.CanvasTexture(cn)
+        normal.colorSpace = THREE.NoColorSpace
+        normal.anisotropy = 12
+        normal.wrapS = normal.wrapT = THREE.RepeatWrapping
+        normal.repeat.set(14,14)
+
+        const rough = new THREE.CanvasTexture(cr)
+        rough.colorSpace = THREE.NoColorSpace
+        rough.anisotropy = 12
+        rough.wrapS = rough.wrapT = THREE.RepeatWrapping
+        rough.repeat.set(14,14)
+
+        return { albedo, normal, rough }
+      }
+      buildLiminal(scene, physics){
+        const rng = this.rng
+
+        const ruinMat = this.makeRuinMaterial()
+        const woodMat = this.makeWoodMaterial()
+
+        const rootCount = Math.floor(220 + this.shift*20)
+        const treeGeo = new THREE.CylinderGeometry(0.2, 0.55, 8, 8, 10, true)
+        const boneGeo = new THREE.CylinderGeometry(0.06, 0.12, 3.0, 8, 6, true)
+
+        const trees = new THREE.InstancedMesh(treeGeo, woodMat, rootCount)
+        trees.castShadow = true
+        trees.receiveShadow = true
+        const bones = new THREE.InstancedMesh(boneGeo, ruinMat, rootCount)
+        bones.castShadow = true
+        bones.receiveShadow = true
+
+        const dummy = new THREE.Object3D()
+        for(let i=0;i<rootCount;i++){
+          const x = lerp(-92, 92, rng())
+          const z = lerp(-92, 92, rng())
+          const h = this.heightAt(x,z)
+          const s = lerp(0.8, 1.8, rng())
+          const twist = lerp(-0.35, 0.35, rng()) + Math.sin((x+z)*0.02)*0.18
+          dummy.position.set(x, h+4*s, z)
+          dummy.rotation.set(twist, lerp(0, Math.PI*2, rng()), twist*0.6)
+          dummy.scale.set(lerp(0.7,1.6,rng())*s, lerp(0.8,1.4,rng())*s, lerp(0.7,1.6,rng())*s)
+          dummy.updateMatrix()
+          trees.setMatrixAt(i, dummy.matrix)
+
+          const bx = x + lerp(-1.2, 1.2, rng())
+          const bz = z + lerp(-1.2, 1.2, rng())
+          const bh = this.heightAt(bx,bz)
+          dummy.position.set(bx, bh+0.9, bz)
+          dummy.rotation.set(lerp(-1.1,-0.2,rng()), lerp(0,Math.PI*2,rng()), lerp(-0.25,0.25,rng()))
+          dummy.scale.set(lerp(0.9,1.6,rng())*s, lerp(0.8,1.4,rng())*s, lerp(0.9,1.6,rng())*s)
+          dummy.updateMatrix()
+          bones.setMatrixAt(i, dummy.matrix)
+        }
+        scene.add(trees)
+        scene.add(bones)
+        this.instances.push(trees, bones)
+
+        const monolithGeo = new THREE.BoxGeometry(6, 18, 5)
+        const monoliths = new THREE.InstancedMesh(monolithGeo, ruinMat, 26)
+        monoliths.castShadow = true
+        monoliths.receiveShadow = true
+        for(let i=0;i<26;i++){
+          const x = lerp(-70, 70, rng())
+          const z = lerp(-70, 70, rng())
+          const h = this.heightAt(x,z)
+          dummy.position.set(x, h+9, z)
+          dummy.rotation.set(lerp(-0.06,0.06,rng()), lerp(0,Math.PI*2,rng()), lerp(-0.06,0.06,rng()))
+          const sc = lerp(0.8, 1.8, rng())
+          dummy.scale.set(lerp(0.8,1.2,rng())*sc, lerp(0.9,1.5,rng())*sc, lerp(0.8,1.2,rng())*sc)
+          dummy.updateMatrix()
+          monoliths.setMatrixAt(i, dummy.matrix)
+        }
+        scene.add(monoliths)
+        this.instances.push(monoliths)
+
+        const bridge = this.makeBridge(scene, physics, ruinMat)
+        bridge.position.set(0, this.heightAt(0,-40)+6.5, -40)
+        scene.add(bridge)
+
+        const church = this.makeChurch(scene, physics, ruinMat)
+        church.position.set(-36, this.heightAt(-36,18)+0.2, 18)
+        scene.add(church)
+
+        const chair = this.makeChair(scene, physics, woodMat)
+        chair.position.set(18, this.heightAt(18,22)+0.5, 22)
+        scene.add(chair)
+
+        const rune = this.makeRunePlane()
+        rune.position.set(-6, this.heightAt(-6,-8)+0.08, -8)
+        rune.rotation.y = 0.4
+        scene.add(rune)
+        this.interactables.push({ type:'rune', obj:rune, hint:'Sotto la luna, le parole respirano.' })
+      }
+      makeRuinMaterial(){
+        const { map, normal, rough, metal } = this.makePBRSet(0.10, 0.22, 0.30, true)
+        const mat = new THREE.MeshStandardMaterial({
+          map,
+          normalMap: normal,
+          roughnessMap: rough,
+          metalnessMap: metal,
+          roughness: 0.95,
+          metalness: 0.05
+        })
+        return mat
+      }
+      makeWoodMaterial(){
+        const { map, normal, rough, metal } = this.makePBRSet(0.07, 0.16, 0.20, false)
+        const mat = new THREE.MeshStandardMaterial({
+          map,
+          normalMap: normal,
+          roughnessMap: rough,
+          metalnessMap: metal,
+          roughness: 0.98,
+          metalness: 0.0
+        })
+        return mat
+      }
+      makePBRSet(minA, maxA, contrast, allowMetal){
+        const w=1024,h=1024
+        const mk = ()=>{ const c=document.createElement('canvas'); c.width=w; c.height=h; return c }
+        const ca=mk(), cn=mk(), cr=mk(), cm=mk()
+        const ga=ca.getContext('2d')
+        const gn=cn.getContext('2d')
+        const gr=cr.getContext('2d')
+        const gm=cm.getContext('2d')
+        const ia=ga.getImageData(0,0,w,h)
+        const inorm=gn.getImageData(0,0,w,h)
+        const ir=gr.getImageData(0,0,w,h)
+        const im=gm.getImageData(0,0,w,h)
+        const da=ia.data, dn=inorm.data, dr=ir.data, dm=im.data
+        const rng = this.rng
+        const simplex = this.simplex
+        const s=0.012
+        for(let y=0;y<h;y++){
+          for(let x=0;x<w;x++){
+            const i=(y*w+x)*4
+            let n=0,a=1,f=1
+            for(let k=0;k<6;k++){
+              n += a*simplex.noise2D(x*s*f, y*s*f)
+              a*=0.55
+              f*=2.04
+            }
+            const g = clamp(0.5 + 0.5*n,0,1)
+            const grit = (rng()*2-1)*0.07
+            const v = clamp(lerp(minA,maxA,g) + grit*contrast, 0, 1)
+            const col = Math.floor(lerp(8, 190, v))
+            da[i+0]=Math.floor(col*0.88)
+            da[i+1]=Math.floor(col*0.92)
+            da[i+2]=Math.floor(col*1.00)
+            da[i+3]=255
+
+            const eps=1
+            const nL = simplex.noise2D((x-eps)*s*3.0, y*s*3.0)
+            const nR = simplex.noise2D((x+eps)*s*3.0, y*s*3.0)
+            const nD = simplex.noise2D(x*s*3.0, (y-eps)*s*3.0)
+            const nU = simplex.noise2D(x*s*3.0, (y+eps)*s*3.0)
+            const dx = (nR - nL)*0.9
+            const dy = (nU - nD)*0.9
+            let lx=-dx, ly=-dy, lz=1
+            const inv=1/Math.sqrt(lx*lx+ly*ly+lz*lz)
+            lx*=inv; ly*=inv; lz*=inv
+            dn[i+0]=Math.floor((lx*0.5+0.5)*255)
+            dn[i+1]=Math.floor((ly*0.5+0.5)*255)
+            dn[i+2]=Math.floor((lz*0.5+0.5)*255)
+            dn[i+3]=255
+
+            const rgh = clamp(0.78 + (1-g)*0.16 + Math.abs(grit)*0.15,0,1)
+            const rv = Math.floor(rgh*255)
+            dr[i+0]=rv; dr[i+1]=rv; dr[i+2]=rv; dr[i+3]=255
+
+            let mv = 0
+            if(allowMetal){
+              const scratches = Math.pow(clamp(1 - Math.abs(Math.sin((x*0.011+y*0.007)*14.0)),0,1), 10)
+              const ox = clamp(0.5 + 0.5*simplex.noise2D(x*s*0.75, y*s*0.75),0,1)
+              mv = clamp(scratches*0.65 + (1-ox)*0.10, 0, 1)
+            }
+            const mm = Math.floor(mv*255)
+            dm[i+0]=mm; dm[i+1]=mm; dm[i+2]=mm; dm[i+3]=255
+          }
+        }
+        ga.putImageData(ia,0,0)
+        gn.putImageData(inorm,0,0)
+        gr.putImageData(ir,0,0)
+        gm.putImageData(im,0,0)
+
+        const map = new THREE.CanvasTexture(ca)
+        map.colorSpace = THREE.SRGBColorSpace
+        map.anisotropy = 12
+        map.wrapS = map.wrapT = THREE.RepeatWrapping
+        map.repeat.set(6,6)
+
+        const normal = new THREE.CanvasTexture(cn)
+        normal.colorSpace = THREE.NoColorSpace
+        normal.anisotropy = 12
+        normal.wrapS = normal.wrapT = THREE.RepeatWrapping
+        normal.repeat.set(6,6)
+
+        const rough = new THREE.CanvasTexture(cr)
+        rough.colorSpace = THREE.NoColorSpace
+        rough.anisotropy = 12
+        rough.wrapS = rough.wrapT = THREE.RepeatWrapping
+        rough.repeat.set(6,6)
+
+        const metal = new THREE.CanvasTexture(cm)
+        metal.colorSpace = THREE.NoColorSpace
+        metal.anisotropy = 12
+        metal.wrapS = metal.wrapT = THREE.RepeatWrapping
+        metal.repeat.set(6,6)
+
+        return { map, normal, rough, metal }
+      }
+      makeBridge(scene, physics, mat){
+        const g = new THREE.Group()
+        const deck = new THREE.Mesh(new THREE.BoxGeometry(42, 1.2, 6), mat)
+        deck.castShadow = true
+        deck.receiveShadow = true
+        g.add(deck)
+
+        const pGeo = new THREE.BoxGeometry(2.2, 10, 2.2)
+        const xs = [-18,-6,6,18]
+        for(const x of xs){
+          const p = new THREE.Mesh(pGeo, mat)
+          p.position.set(x, -5.2, -2.4)
+          p.castShadow = true
+          p.receiveShadow = true
+          g.add(p)
+        }
+
+        const body = new CANNON.Body({ mass:0 })
+        body.addShape(new CANNON.Box(new CANNON.Vec3(21, 0.6, 3)), new CANNON.Vec3(0,0,0))
+        physics.addBody(body)
+        g.userData.physicsBody = body
+
+        return g
+      }
+      makeChurch(scene, physics, mat){
+        const g = new THREE.Group()
+        const base = new THREE.Mesh(new THREE.BoxGeometry(16, 6, 22), mat)
+        base.position.set(0,3,0)
+        base.castShadow = true
+        base.receiveShadow = true
+        g.add(base)
+
+        const nave = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 18), mat)
+        nave.position.set(0,8,1)
+        nave.castShadow = true
+        nave.receiveShadow = true
+        g.add(nave)
+
+        const arch = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.6, 16, 32, Math.PI), mat)
+        arch.position.set(0,7,-8.8)
+        arch.rotation.x = Math.PI
+        arch.castShadow = true
+        arch.receiveShadow = true
+        g.add(arch)
+
+        const altarAbsence = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.5, 2.0), mat)
+        altarAbsence.position.set(0,3.4,7.6)
+        altarAbsence.castShadow = true
+        altarAbsence.receiveShadow = true
+        g.add(altarAbsence)
+
+        const body = new CANNON.Body({ mass:0 })
+        body.addShape(new CANNON.Box(new CANNON.Vec3(8,3,11)), new CANNON.Vec3(0,3,0))
+        body.addShape(new CANNON.Box(new CANNON.Vec3(5,5,9)), new CANNON.Vec3(0,8,1))
+        physics.addBody(body)
+        g.userData.physicsBody = body
+
+        this.interactables.push({ type:'church', obj:g, hint:'Una chiesa senza altare, eppure pesa.' })
+        return g
+      }
+      makeChair(scene, physics, mat){
+        const g = new THREE.Group()
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 1.2), mat)
+        seat.position.y = 0.7
+        seat.castShadow = true
+        seat.receiveShadow = true
+        g.add(seat)
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 0.2), mat)
+        back.position.set(0,1.3,-0.5)
+        back.castShadow = true
+        back.receiveShadow = true
+        g.add(back)
+
+        const legGeo = new THREE.BoxGeometry(0.15, 0.7, 0.15)
+        const legs = [
+          [-0.5,0.35,-0.5],[0.5,0.35,-0.5],[-0.5,0.35,0.5],[0.5,0.35,0.5]
+        ]
+        for(const [x,y,z] of legs){
+          const leg = new THREE.Mesh(legGeo, mat)
+          leg.position.set(x,y,z)
+          leg.castShadow = true
+          leg.receiveShadow = true
+          g.add(leg)
+        }
+
+        const body = new CANNON.Body({ mass:0 })
+        body.addShape(new CANNON.Box(new CANNON.Vec3(0.6,0.8,0.6)), new CANNON.Vec3(0,0.8,0))
+        physics.addBody(body)
+        g.userData.physicsBody = body
+
+        this.interactables.push({ type:'chair', obj:g, hint:'Una sola sedia. Come se qualcuno dovesse tornare.' })
+        return g
+      }
+      makeRunePlane(){
+        const c = document.createElement('canvas')
+        c.width = 1024
+        c.height = 256
+        const g = c.getContext('2d')
+        g.fillStyle = 'rgba(0,0,0,0)'
+        g.fillRect(0,0,c.width,c.height)
+        g.font = '700 76px ui-sans-serif, system-ui'
+        g.fillStyle = 'rgba(210,225,255,0.9)'
+        g.shadowColor = 'rgba(160,200,255,0.9)'
+        g.shadowBlur = 26
+        g.fillText('TROPP0 TARDI', 70, 140)
+        const tex = new THREE.CanvasTexture(c)
+        tex.colorSpace = THREE.SRGBColorSpace
+        const mat = new THREE.MeshStandardMaterial({
+          map: tex,
+          transparent:true,
+          emissive: new THREE.Color(0x9fb6ff),
+          emissiveIntensity: 0.0,
+          roughness: 0.9,
+          metalness: 0.0
+        })
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(9, 2.25), mat)
+        mesh.renderOrder = 1
+        mesh.castShadow = false
+        mesh.receiveShadow = true
+        mesh.userData.isRune = true
+        return mesh
+      }
+      buildGoblins(scene, physics){
+        const count = 10 + Math.floor(this.shift*2)
+        for(let i=0;i<count;i++){
+          const x = lerp(-55,55,this.rng())
+          const z = lerp(-55,55,this.rng())
+          const y = this.heightAt(x,z) + 1.2
+          const gob = new Goblin(new THREE.Vector3(x,y,z), this.rng, this.shift)
+          gob.addTo(scene, physics)
+          this.bosses.push(gob)
+        }
+      }
+      buildBosses(scene, physics){
+        const arena = new THREE.Vector3(54,0,-56)
+        arena.y = this.heightAt(arena.x, arena.z)
+        const knight = new TwilightKnight(arena.clone().add(new THREE.Vector3(0,1.2,0)), this.rng, this.shift)
+        knight.addTo(scene, physics)
+        this.bosses.push(knight)
+
+        const motherPos = new THREE.Vector3(-62,0,-54)
+        motherPos.y = this.heightAt(motherPos.x, motherPos.z)
+        const mother = new GoblinMother(motherPos.clone().add(new THREE.Vector3(0,2.4,0)), this.rng, this.shift)
+        mother.addTo(scene, physics)
+        this.bosses.push(mother)
+      }
+      buildFaceless(scene, physics){
+        const p = new THREE.Vector3(0,0,0)
+        p.y = this.heightAt(p.x,p.z) + 1.4
+        const f = new Faceless(p.clone().add(new THREE.Vector3(0,0,-14)), this.rng, this.shift)
+        f.addTo(scene, physics)
+        f.setActive(false)
+        this.faceless = f
+      }
+      step(dt, t, playerPos, staredMoon){
+        this.villagePulse += dt * 0.35
+        for(const inst of this.instances){
+          inst.visible = true
+        }
+        for(const it of this.interactables){
+          if(it.obj.userData.isRune){
+            const m = it.obj.material
+            const glow = clamp(staredMoon/4.0, 0, 1)
+            m.emissiveIntensity = lerp(0.0, 1.0, glow)
+            m.opacity = lerp(0.25, 0.92, glow)
+            it.obj.scale.setScalar(lerp(1.0, 1.06, glow))
+          }
+        }
+        for(const zone of this.zones){
+          if(zone.name==='moonWatch'){
+            const d = playerPos.distanceTo(zone.center)
+            if(d < zone.r){
+              scene.fog.density = lerp(scene.fog.density, 0.0135 + this.shift*0.0007, 0.015)
+            }
+          }
+        }
+      }
+    }
+
+    class Character{
+      constructor(pos){
+        this.pos = pos.clone()
+        this.mesh = null
+        this.body = null
+        this.hp = 100
+        this.alive = true
+        this.state = 'idle'
+        this.cool = 0
+      }
+      damage(amount){
+        if(!this.alive) return
+        this.hp -= amount
+        if(this.hp <= 0){
+          this.hp = 0
+          this.alive = false
+          this.onDeath()
+        }
+      }
+      onDeath(){}
+      addTo(scene, physics){}
+      step(dt, t, ctx){}
+    }
+
+    class Goblin extends Character{
+      constructor(pos, rngFn, shift){
+        super(pos)
+        this.rngFn = rngFn
+        this.shift = shift
+        this.hp = 48 + shift*6
+        this.observe = lerp(1.2, 3.4, rngFn())
+        this.attackRange = lerp(1.35, 1.75, rngFn())
+        this.speed = lerp(3.2, 4.6, rngFn())
+        this.aggr = 0
+        this.lastMimic = 0
+        this.weaponCd = 0
+      }
+      addTo(scene, physics){
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x1c1b16),
+          roughness: 0.95,
+          metalness: 0.05,
+          emissive: new THREE.Color(0x0a0908),
+          emissiveIntensity: 0.2
+        })
+        const geo = new THREE.CapsuleGeometry(0.42, 0.7, 6, 10)
+        const m = new THREE.Mesh(geo, mat)
+        m.castShadow = true
+        m.receiveShadow = true
+        m.position.copy(this.pos)
+        scene.add(m)
+        this.mesh = m
+
+        const body = new CANNON.Body({ mass: 18 })
+        body.addShape(new CANNON.Sphere(0.52), new CANNON.Vec3(0,0.52,0))
+        body.position.set(this.pos.x, this.pos.y, this.pos.z)
+        body.linearDamping = 0.55
+        body.angularDamping = 0.98
+        physics.addBody(body)
+        this.body = body
+      }
+      onDeath(){
+        if(this.mesh){
+          this.mesh.material.emissive = new THREE.Color(0x050505)
+          this.mesh.material.emissiveIntensity = 0.0
+        }
+      }
+      step(dt, t, ctx){
+        if(!this.alive) return
+        const { player, audio } = ctx
+        const p = player.body.position
+        const my = this.body.position
+        const dx = p.x - my.x
+        const dz = p.z - my.z
+        const dist = Math.sqrt(dx*dx + dz*dz)
+        const see = dist < 18
+
+        if(this.weaponCd>0) this.weaponCd -= dt
+
+        if(this.state==='idle'){
+          if(see){
+            this.cool = this.observe
+            this.state = 'observe'
+          }
+        }else if(this.state==='observe'){
+          this.cool -= dt
+          const ang = Math.atan2(dz, dx)
+          this.body.velocity.x += Math.cos(ang+Math.PI/2)*0.2
+          this.body.velocity.z += Math.sin(ang+Math.PI/2)*0.2
+          if(this.cool<=0){
+            this.state = 'stalk'
+            this.aggr = 0
+          }
+          if(t - this.lastMimic > 6.0 && dist>8 && dist<16){
+            this.lastMimic = t
+            if(audio) audio.spawnWhisper(0.14 + this.shift*0.01)
+            if(nowSec() - STATE.lastWhisperAt > STATE.whisperCool){
+              STATE.lastWhisperAt = nowSec()
+              whisper('Hai sentito qualcuno chiamarti?')
+            }
+          }
+        }else if(this.state==='stalk'){
+          this.aggr = clamp(this.aggr + dt*0.25, 0, 1)
+          const targetDist = lerp(7.5, 2.4, this.aggr)
+          if(dist > targetDist){
+            const ang = Math.atan2(dz, dx)
+            const vx = Math.cos(ang) * this.speed
+            const vz = Math.sin(ang) * this.speed
+            this.body.velocity.x = lerp(this.body.velocity.x, vx, 0.08)
+            this.body.velocity.z = lerp(this.body.velocity.z, vz, 0.08)
+          }else{
+            this.state = 'attack'
+            this.cool = lerp(0.4, 0.9, this.rngFn())
+          }
+        }else if(this.state==='attack'){
+          this.cool -= dt
+          if(this.cool<=0){
+            if(dist < this.attackRange + 0.35 && this.weaponCd<=0){
+              this.weaponCd = 1.2 + this.rngFn()*0.6
+              const ang = Math.atan2(dz, dx)
+              const hitDir = new THREE.Vector3(Math.cos(ang), 0, Math.sin(ang))
+              const parry = player.tryParry(t, hitDir)
+              if(parry){
+                this.damage(16 + this.shift*2)
+                if(audio) audio.oneShotMetal()
+                this.body.velocity.x -= hitDir.x*3.2
+                this.body.velocity.z -= hitDir.z*3.2
+              }else{
+                player.hit(10 + this.shift*2, hitDir)
+              }
+            }
+            this.state = 'stalk'
+          }
+        }
+
+        this.mesh.position.copy(this.body.position)
+        this.mesh.quaternion.copy(this.body.quaternion)
+      }
+    }
+
+    class TwilightKnight extends Character{
+      constructor(pos, rngFn, shift){
+        super(pos)
+        this.rngFn = rngFn
+        this.shift = shift
+        this.hp = 160 + shift*24
+        this.state = 'sleep'
+        this.wakeDist = 22
+        this.weaponCd = 0
+        this.kneel = 0
+      }
+      addTo(scene, physics){
+        const metal = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x14151a),
+          roughness: 0.35,
+          metalness: 0.92,
+          emissive: new THREE.Color(0x05060a),
+          emissiveIntensity: 0.25
+        })
+        const flesh = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x2a1717),
+          roughness: 0.92,
+          metalness: 0.0,
+          emissive: new THREE.Color(0x0b0505),
+          emissiveIntensity: 0.18
+        })
+        const g = new THREE.Group()
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 0.9), metal)
+        torso.position.y = 2.0
+        torso.castShadow = true
+        torso.receiveShadow = true
+        g.add(torso)
+        const helm = new THREE.Mesh(new THREE.SphereGeometry(0.55, 20, 18), metal)
+        helm.position.y = 3.25
+        helm.scale.set(1.0,1.25,1.0)
+        helm.castShadow = true
+        helm.receiveShadow = true
+        g.add(helm)
+        const tumor = new THREE.Mesh(new THREE.SphereGeometry(0.55, 18, 16), flesh)
+        tumor.position.set(0.45, 2.25, -0.25)
+        tumor.scale.set(1.2,1.0,1.35)
+        tumor.castShadow = true
+        tumor.receiveShadow = true
+        g.add(tumor)
+
+        const sword = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.4, 0.32), metal)
+        sword.position.set(0.9, 2.2, 0.2)
+        sword.rotation.z = -0.3
+        sword.castShadow = true
+        sword.receiveShadow = true
+        g.add(sword)
+
+        g.position.copy(this.pos)
+        scene.add(g)
+        this.mesh = g
+
+        const body = new CANNON.Body({ mass: 120 })
+        body.addShape(new CANNON.Sphere(0.75), new CANNON.Vec3(0,0.75,0))
+        body.position.set(this.pos.x, this.pos.y, this.pos.z)
+        body.linearDamping = 0.60
+        body.angularDamping = 0.99
+        physics.addBody(body)
+        this.body = body
+      }
+      onDeath(){
+        this.kneel = 1
+        this.state = 'kneel'
+      }
+      step(dt, t, ctx){
+        const { player, audio } = ctx
+        const p = player.body.position
+        const my = this.body.position
+        const dx = p.x - my.x
+        const dz = p.z - my.z
+        const dist = Math.sqrt(dx*dx + dz*dz)
+
+        if(this.weaponCd>0) this.weaponCd -= dt
+
+        if(this.state==='sleep'){
+          if(dist < this.wakeDist){
+            this.state = 'wake'
+            if(nowSec() - STATE.lastWhisperAt > STATE.whisperCool){
+              STATE.lastWhisperAt = nowSec()
+              whisper('Il Cavaliere del Crepuscolo ti riconosce.')
+            }
+          }
+        }else if(this.state==='wake'){
+          const ang = Math.atan2(dz, dx)
+          const vx = Math.cos(ang)*1.8
+          const vz = Math.sin(ang)*1.8
+          this.body.velocity.x = lerp(this.body.velocity.x, vx, 0.06)
+          this.body.velocity.z = lerp(this.body.velocity.z, vz, 0.06)
+          if(dist < 3.2 && this.weaponCd<=0 && this.alive){
+            this.weaponCd = 2.1
+            const dir = new THREE.Vector3(Math.cos(ang),0,Math.sin(ang))
+            const parry = player.tryParry(t, dir)
+            if(parry){
+              this.damage(22 + this.shift*3)
+              if(audio) audio.oneShotMetal()
+              this.body.velocity.x -= dir.x*2.2
+              this.body.velocity.z -= dir.z*2.2
+            }else{
+              player.hit(18 + this.shift*3, dir)
+            }
+          }
+        }else if(this.state==='kneel'){
+          this.body.velocity.x *= 0.90
+          this.body.velocity.z *= 0.90
+        }
+
+        this.mesh.position.copy(this.body.position)
+        if(this.state==='kneel'){
+          this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0.28, 0.05)
+        }else{
+          this.mesh.rotation.x = lerp(this.mesh.rotation.x, 0.0, 0.08)
+        }
+        this.mesh.rotation.y = Math.atan2(dz, dx) - Math.PI/2
+      }
+    }
+
+    class GoblinMother extends Character{
+      constructor(pos, rngFn, shift){
+        super(pos)
+        this.rngFn = rngFn
+        this.shift = shift
+        this.hp = 220 + shift*30
+        this.spawnCd = 4.0
+        this.deform = 0
+      }
+      addTo(scene, physics){
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x15130f),
+          roughness: 0.98,
+          metalness: 0.0,
+          emissive: new THREE.Color(0x050403),
+          emissiveIntensity: 0.25
+        })
+        const g = new THREE.Group()
+        const body = new THREE.Mesh(new THREE.SphereGeometry(3.2, 36, 24), mat)
+        body.scale.set(1.2,0.9,1.4)
+        body.castShadow = true
+        body.receiveShadow = true
+        g.add(body)
+        const crown = new THREE.Mesh(new THREE.TorusGeometry(2.4, 0.45, 14, 44), mat)
+        crown.position.y = 1.2
+        crown.rotation.x = Math.PI/2
+        crown.castShadow = true
+        crown.receiveShadow = true
+        g.add(crown)
+        g.position.copy(this.pos)
+        scene.add(g)
+        this.mesh = g
+
+        const b = new CANNON.Body({ mass:0 })
+        b.addShape(new CANNON.Sphere(3.6), new CANNON.Vec3(0,3.0,0))
+        b.position.set(this.pos.x, this.pos.y, this.pos.z)
+        physics.addBody(b)
+        this.body = b
+      }
+      step(dt, t, ctx){
+        const { player, world, physics, scene } = ctx
+        const p = player.body.position
+        const my = this.body.position
+        const dx = p.x - my.x
+        const dz = p.z - my.z
+        const dist = Math.sqrt(dx*dx + dz*dz)
+        if(dist < 32){
+          this.deform = clamp(this.deform + dt*0.06, 0, 1)
+        }else{
+          this.deform = clamp(this.deform - dt*0.05, 0, 1)
+        }
+        this.spawnCd -= dt
+        if(dist < 22 && this.spawnCd<=0 && this.hp>0){
+          this.spawnCd = lerp(5.2, 2.6, this.deform)
+          const s = world.rng()
+          const a = world.rng()*Math.PI*2
+          const r = lerp(6.0, 11.0, s)
+          const x = my.x + Math.cos(a)*r
+          const z = my.z + Math.sin(a)*r
+          const y = world.heightAt(x,z) + 1.2
+          const gob = new Goblin(new THREE.Vector3(x,y,z), world.rng, world.shift)
+          gob.addTo(scene, physics)
+          world.bosses.push(gob)
+        }
+        this.mesh.position.copy(this.body.position)
+
+        if(scene.fog){
+          const target = lerp(0.010, 0.018, this.deform)
+          scene.fog.density = lerp(scene.fog.density, target, 0.01)
+        }
+      }
+    }
+
+    class Faceless extends Character{
+      constructor(pos, rngFn, shift){
+        super(pos)
+        this.rngFn = rngFn
+        this.shift = shift
+        this.hp = 9999
+        this.active = false
+        this.mirror = 0
+        this.lock = 0
+      }
+      addTo(scene, physics){
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x0e0e12),
+          roughness: 0.55,
+          metalness: 0.15,
+          emissive: new THREE.Color(0x07070b),
+          emissiveIntensity: 0.55
+        })
+        const g = new THREE.Group()
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.58, 24, 18), mat)
+        head.position.y = 1.9
+        head.castShadow = true
+        head.receiveShadow = true
+        g.add(head)
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.42, 1.1, 8, 14), mat)
+        torso.position.y = 1.1
+        torso.castShadow = true
+        torso.receiveShadow = true
+        g.add(torso)
+        g.position.copy(this.pos)
+        scene.add(g)
+        this.mesh = g
+
+        const body = new CANNON.Body({ mass: 26 })
+        body.addShape(new CANNON.Sphere(0.52), new CANNON.Vec3(0,0.52,0))
+        body.position.set(this.pos.x, this.pos.y, this.pos.z)
+        body.linearDamping = 0.65
+        body.angularDamping = 0.98
+        physics.addBody(body)
+        this.body = body
+      }
+      setActive(v){
+        this.active = v
+        if(this.mesh) this.mesh.visible = v
+        if(this.body) this.body.sleep()
+      }
+      step(dt, t, ctx){
+        if(!this.active) return
+        const { player } = ctx
+        const p = player.body.position
+        const my = this.body.position
+        const dx = p.x - my.x
+        const dz = p.z - my.z
+        const dist = Math.sqrt(dx*dx + dz*dz)
+        this.lock = clamp(this.lock + dt*0.12, 0, 1)
+
+        const ang = Math.atan2(dz, dx)
+        const chase = lerp(2.2, 4.2, this.lock)
+        if(dist > 1.4){
+          const vx = Math.cos(ang)*chase
+          const vz = Math.sin(ang)*chase
+          this.body.velocity.x = lerp(this.body.velocity.x, vx, 0.06)
+          this.body.velocity.z = lerp(this.body.velocity.z, vz, 0.06)
+        }
+
+        const view = player.forward()
+        const toF = new THREE.Vector3(my.x - p.x, 0, my.z - p.z).normalize()
+        const dot = clamp(view.dot(toF), -1, 1)
+        const seen = dot > 0.7 && dist < 10
+
+        if(seen){
+          this.mirror = clamp(this.mirror + dt*0.55, 0, 1)
+        }else{
+          this.mirror = clamp(this.mirror - dt*0.25, 0, 1)
+        }
+
+        this.mesh.position.copy(this.body.position)
+        this.mesh.rotation.y = Math.atan2(dz, dx) - Math.PI/2
+
+        if(dist < 1.2 && this.mirror > 0.35){
+          player.loseToFaceless()
+        }
+      }
+    }
+
+    class Player{
+      constructor(physics, world){
+        this.physics = physics
+        this.world = world
+        this.body = new CANNON.Body({ mass: 70 })
+        this.body.addShape(new CANNON.Sphere(0.45), new CANNON.Vec3(0,0.45,0))
+        this.body.position.set(0, world.heightAt(0,0)+2.2, 0)
+        this.body.linearDamping = 0.22
+        this.body.angularDamping = 0.98
+        physics.addBody(this.body)
+
+        this.stamina = 100
+        this.staminaMax = 100
+        this.staminaRegen = 18
+        this.staminaDrainRun = 22
+        this.staminaDrainAttack = 16
+
+        this.hp = 100
+        this.alive = true
+
+        this.want = { f:0, s:0, jump:false, run:false, crouch:false, attack:false, block:false, interact:false, stare:false, mount:false }
+        this.attackState = { phase:'idle', t:0, lastHitAt: -999, swingVel:0, recovery:0 }
+        this.blockState = { active:false, window:0, lastAt:-999 }
+
+        this.camOffset = new THREE.Vector3(0, 1.55, 0)
+        this.look = { yaw:0, pitch:0 }
+
+        this.sword = this.makeSword()
+        this.swordVisible = true
+
+        this.horse = null
+        this.mounted = false
+        this.mountCd = 0
+
+        this.lossLocked = false
+      }
+      makeSword(){
+        const { map, normal, rough, metal } = this.world.makePBRSet(0.06, 0.22, 0.42, true)
+        const mat = new THREE.MeshStandardMaterial({
+          map,
+          normalMap: normal,
+          roughnessMap: rough,
+          metalnessMap: metal,
+          roughness: 0.35,
+          metalness: 1.0,
+          emissive: new THREE.Color(0x05060a),
+          emissiveIntensity: 0.15
+        })
+        const g = new THREE.Group()
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.07, 1.05, 0.12), mat)
+        blade.position.y = 0.52
+        blade.castShadow = true
+        blade.receiveShadow = true
+        g.add(blade)
+        const guard = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.06, 0.12), mat)
+        guard.position.y = 0.12
+        guard.castShadow = true
+        guard.receiveShadow = true
+        g.add(guard)
+        const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.24, 0.08), mat)
+        grip.position.y = 0.0
+        grip.castShadow = true
+        grip.receiveShadow = true
+        g.add(grip)
+        g.userData.damage = 16
+        return g
+      }
+      forward(){
+        const v = new THREE.Vector3(0,0,-1)
+        v.applyAxisAngle(new THREE.Vector3(0,1,0), this.look.yaw)
+        return v.normalize()
+      }
+      right(){
+        const v = new THREE.Vector3(1,0,0)
+        v.applyAxisAngle(new THREE.Vector3(0,1,0), this.look.yaw)
+        return v.normalize()
+      }
+      tryParry(t, incomingDir){
+        const w = this.blockState
+        if(!w.active) return false
+        const dt = t - w.lastAt
+        if(dt > 0.28) return false
+        const f = this.forward()
+        const facing = clamp(f.dot(incomingDir.clone().multiplyScalar(-1)), -1, 1)
+        return facing > 0.2
+      }
+      hit(amount, dir){
+        if(!this.alive) return
+        this.hp -= amount
+        this.body.velocity.x += dir.x*4.2
+        this.body.velocity.z += dir.z*4.2
+        if(this.hp<=0){
+          this.hp=0
+          this.alive=false
+          this.die()
+        }else{
+          if(nowSec() - STATE.lastWhisperAt > STATE.whisperCool){
+            STATE.lastWhisperAt = nowSec()
+            whisper('Il dolore sembra già accaduto.')
+          }
+        }
+      }
+      die(){
+        fadeToBlack(true)
+        setTimeout(()=>{
+          this.respawn()
+          fadeToBlack(false)
+        }, 1200)
+      }
+      respawn(){
+        this.hp = 100
+        this.alive = true
+        this.stamina = 100
+        this.body.position.set(0, this.world.heightAt(0,0)+2.2, 0)
+        this.body.velocity.set(0,0,0)
+        this.body.angularVelocity.set(0,0,0)
+      }
+      loseToFaceless(){
+        if(this.lossLocked) return
+        this.lossLocked = true
+        fadeToBlack(true)
+        setTimeout(()=>{
+          const s = loadSave() || { seed: STATE.seed, worldShift: STATE.worldShift }
+          s.worldShift = (s.worldShift||0) + 1
+          writeSave(s)
+          location.reload()
+        }, 1050)
+      }
+      step(dt, t, ctx){
+        if(this.mountCd>0) this.mountCd -= dt
+        const grounded = true
+        const speedBase = 5.0
+        const runMul = 1.55
+        const crouchMul = 0.65
+        const slopePenalty = 1.0
+
+        const move = new THREE.Vector3()
+        const f = this.forward()
+        const r = this.right()
+        move.addScaledVector(f, this.want.f)
+        move.addScaledVector(r, this.want.s)
+        const mag = Math.sqrt(move.x*move.x + move.z*move.z)
+        if(mag>1e-3){ move.multiplyScalar(1/mag) }
+
+        const running = this.want.run && this.stamina>5 && mag>0.05 && !this.mounted
+        const crouching = this.want.crouch && !this.mounted
+        let maxSpeed = speedBase * (running ? runMul : 1) * (crouching ? crouchMul : 1) * slopePenalty
+
+        const vx = this.body.velocity.x
+        const vz = this.body.velocity.z
+        const curSpeed = Math.sqrt(vx*vx + vz*vz)
+
+        const desiredVX = move.x * maxSpeed
+        const desiredVZ = move.z * maxSpeed
+        const accel = running ? 16 : 12
+        this.body.velocity.x = lerp(this.body.velocity.x, desiredVX, clamp(accel*dt,0,1))
+        this.body.velocity.z = lerp(this.body.velocity.z, desiredVZ, clamp(accel*dt,0,1))
+
+        if(this.want.jump && grounded && !this.mounted){
+          this.body.velocity.y = 5.2
+        }
+
+        const drain = running ? this.staminaDrainRun : 0
+        const regen = (!running && mag<0.1) ? this.staminaRegen : this.staminaRegen*0.55
+        this.stamina = clamp(this.stamina - drain*dt + regen*dt, 0, this.staminaMax)
+
+        if(mag>0.2 && grounded){
+          ctx.audio?.footstep(clamp(curSpeed/6.5,0,1))
+        }
+
+        this.blockState.active = this.want.block
+        if(this.want.block){
+          this.blockState.lastAt = t
+        }
+
+        this.stepAttack(dt, t, ctx, curSpeed)
+
+        const camY = crouching ? 1.22 : 1.55
+        this.camOffset.y = lerp(this.camOffset.y, camY, 0.10)
+
+        if(this.want.interact){
+          this.tryInteract(ctx)
+        }
+
+        if(this.want.mount && this.horse && this.mountCd<=0){
+          this.mountCd = 0.8
+          this.toggleMount(ctx)
+        }
+      }
+      stepAttack(dt, t, ctx, curSpeed){
+        const a = this.attackState
+        if(a.recovery>0) a.recovery -= dt
+
+        if(a.phase==='idle'){
+          if(this.want.attack && this.stamina > 12 && a.recovery<=0){
+            a.phase = 'charge'
+            a.t = 0
+            a.swingVel = 0
+          }
+        }else if(a.phase==='charge'){
+          a.t += dt
+          a.swingVel = lerp(a.swingVel, 1.0 + a.t*1.8, 0.12)
+          if(!this.want.attack || a.t>0.65){
+            this.stamina = clamp(this.stamina - this.staminaDrainAttack, 0, this.staminaMax)
+            a.phase = 'swing'
+            a.t = 0
+            a.lastHitAt = -999
+          }
+        }else if(a.phase==='swing'){
+          a.t += dt
+          const swing = smoothstep(0, 0.28, a.t) * (1 - smoothstep(0.28, 0.6, a.t))
+          a.swingVel = lerp(a.swingVel, 3.8, 0.10)
+          const hit = this.sweepSword(ctx, a.swingVel*(0.7+0.35*swing))
+          if(hit){
+            a.lastHitAt = t
+            ctx.audio?.oneShotMetal()
+          }
+          if(a.t>0.52){
+            a.phase = 'recover'
+            a.t = 0
+            a.recovery = 0.22 + clamp(curSpeed/12,0,1)*0.08
+          }
+        }else if(a.phase==='recover'){
+          a.t += dt
+          if(a.t>0.22){
+            a.phase = 'idle'
+          }
+        }
+      }
+      swordWorldTransform(){
+        const p = new THREE.Vector3(this.body.position.x, this.body.position.y, this.body.position.z)
+        const f = this.forward()
+        const r = this.right()
+        const base = p.clone().add(new THREE.Vector3(0, this.camOffset.y-0.25, 0))
+        const off = f.clone().multiplyScalar(0.55).add(r.clone().multiplyScalar(0.25))
+        base.add(off)
+        return base
+      }
+      sweepSword(ctx, power){
+        const scene = ctx.scene
+        const world = ctx.world
+        const start = this.swordWorldTransform()
+        const f = this.forward()
+        const r = this.right()
+        const up = new THREE.Vector3(0,1,0)
+
+        const arc = 0.9
+        const a = this.attackState
+        const phaseT = a.t
+        const ang = lerp(-arc, arc, smoothstep(0,0.5,phaseT))
+        const dir = f.clone().applyAxisAngle(up, ang).normalize()
+        const end = start.clone().add(dir.multiplyScalar(1.35))
+
+        const ray = new THREE.Raycaster(start, end.clone().sub(start).normalize(), 0, start.distanceTo(end))
+        const targets = []
+        for(const e of world.bosses){
+          if(e && e.alive && e.mesh) targets.push(e.mesh)
+        }
+        if(world.faceless && world.faceless.active && world.faceless.mesh) targets.push(world.faceless.mesh)
+
+        const hits = ray.intersectObjects(targets, true)
+        if(hits.length){
+          const hitObj = hits[0].object
+          let enemy = null
+          for(const e of world.bosses){
+            if(e.mesh && (e.mesh===hitObj || e.mesh.children.includes(hitObj) || hitObj.parent===e.mesh)) enemy = e
+          }
+          if(!enemy && world.faceless && world.faceless.mesh && (world.faceless.mesh===hitObj || hitObj.parent===world.faceless.mesh)) enemy = world.faceless
+          if(enemy && enemy.alive){
+            const dmg = clamp(power*7.5, 8, 26)
+            enemy.damage(dmg)
+            if(enemy.body){
+              const p = this.body.position
+              const my = enemy.body.position
+              const dir = new THREE.Vector3(my.x-p.x, 0, my.z-p.z).normalize()
+              enemy.body.velocity.x += dir.x * clamp(power*2.2, 2.0, 6.0)
+              enemy.body.velocity.z += dir.z * clamp(power*2.2, 2.0, 6.0)
+            }
+            return true
+          }
+        }
+        return false
+      }
+      tryInteract(ctx){
+        const world = ctx.world
+        const p = new THREE.Vector3(this.body.position.x, this.body.position.y, this.body.position.z)
+        let best = null
+        let bd = 2.2
+        for(const it of world.interactables){
+          const d = p.distanceTo(it.obj.position)
+          if(d<bd){
+            bd=d
+            best=it
+          }
+        }
+        if(best){
+          whisper(best.hint, 4.6)
+          if(best.type==='rune'){
+            this.stamina = clamp(this.stamina + 16, 0, this.staminaMax)
+          }
+        }
+      }
+      toggleMount(ctx){
+        if(!this.horse){
+          this.spawnHorse(ctx)
+          return
+        }
+        this.mounted = !this.mounted
+        if(this.mounted){
+          whisper('Il cavallo trema. Non ama questo posto.')
+          this.horse.mount(this)
+        }else{
+          whisper('Scendi. Il vento ti giudica.')
+          this.horse.dismount(this)
+        }
+      }
+      spawnHorse(ctx){
+        this.horse = new Horse(new THREE.Vector3(this.body.position.x+2, 0, this.body.position.z+2), ctx.world)
+        this.horse.addTo(ctx.scene, ctx.physics)
+        whisper('Un cavallo senza cavaliere si è lasciato trovare.')
+      }
+    }
+
+    class Horse{
+      constructor(pos, world){
+        this.world = world
+        this.pos = pos.clone()
+        this.mesh = null
+        this.body = null
+        this.rider = null
+        this.fear = 0
+      }
+      addTo(scene, physics){
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(0x191513),
+          roughness: 0.95,
+          metalness: 0.0
+        })
+        const g = new THREE.Group()
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.55, 1.6, 10, 18), mat)
+        torso.rotation.z = Math.PI/2
+        torso.position.y = 1.15
+        torso.castShadow = true
+        torso.receiveShadow = true
+        g.add(torso)
+        const neck = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.9, 8, 16), mat)
+        neck.position.set(0.95, 1.55, 0)
+        neck.rotation.z = Math.PI/2
+        neck.rotation.y = 0.2
+        neck.castShadow = true
+        neck.receiveShadow = true
+        g.add(neck)
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 16, 14), mat)
+        head.position.set(1.55, 1.62, 0.05)
+        head.castShadow = true
+        head.receiveShadow = true
+        g.add(head)
+        g.position.set(this.pos.x, this.world.heightAt(this.pos.x,this.pos.z)+0.2, this.pos.z)
+        scene.add(g)
+        this.mesh = g
+
+        const b = new CANNON.Body({ mass: 140 })
+        b.addShape(new CANNON.Sphere(0.75), new CANNON.Vec3(0,0.75,0))
+        b.position.set(g.position.x, g.position.y, g.position.z)
+        b.linearDamping = 0.35
+        b.angularDamping = 0.95
+        physics.addBody(b)
+        this.body = b
+      }
+      mount(player){
+        this.rider = player
+      }
+      dismount(player){
+        this.rider = null
+        player.mounted = false
+      }
+      step(dt, t, ctx){
+        if(!this.body || !this.mesh) return
+        const ppos = ctx.player.body.position
+        const my = this.body.position
+
+        const zones = ctx.world.zones
+        let fearZone = 0
+        for(const z of zones){
+          if(z.name==='fear'){
+            const d = new THREE.Vector3(my.x,0,my.z).distanceTo(z.center)
+            if(d < z.r) fearZone = Math.max(fearZone, 1 - d/z.r)
+          }
+        }
+        this.fear = lerp(this.fear, fearZone, 0.02)
+
+        if(this.rider){
+          const want = ctx.player.want
+          const f = ctx.player.forward()
+          const r = ctx.player.right()
+          const move = new THREE.Vector3()
+          move.addScaledVector(f, want.f)
+          move.addScaledVector(r, want.s)
+          const mag = Math.sqrt(move.x*move.x + move.z*move.z)
+          if(mag>1e-3) move.multiplyScalar(1/mag)
+
+          const nightBoost = 1.18
+          const speed = lerp(7.5, 10.5, nightBoost-1) * (1 + this.fear*0.65)
+          const control = 1 - this.fear*0.62
+          const desiredVX = move.x * speed
+          const desiredVZ = move.z * speed
+          this.body.velocity.x = lerp(this.body.velocity.x, desiredVX, 0.06*control)
+          this.body.velocity.z = lerp(this.body.velocity.z, desiredVZ, 0.06*control)
+
+          ctx.player.body.position.x = my.x
+          ctx.player.body.position.z = my.z
+          ctx.player.body.velocity.x = this.body.velocity.x
+          ctx.player.body.velocity.z = this.body.velocity.z
+
+          if(this.fear > 0.82 && Math.random() < 0.006){
+            ctx.player.mounted = false
+            this.rider = null
+            whisper('Ti disarciona. Ha visto qualcosa che tu non puoi vedere.')
+            ctx.player.body.velocity.y = 4.8
+          }
+        }else{
+          const dx = ppos.x - my.x
+          const dz = ppos.z - my.z
+          const dist = Math.sqrt(dx*dx + dz*dz)
+          if(dist < 3.2){
+            whisper('Premi M per montare.', 1.6)
+          }
+        }
+
+        this.mesh.position.copy(this.body.position)
+        const yaw = Math.atan2(this.body.velocity.z, this.body.velocity.x)
+        if(isFinite(yaw) && (Math.abs(this.body.velocity.x)+Math.abs(this.body.velocity.z))>0.2){
+          this.mesh.rotation.y = lerp(this.mesh.rotation.y, -yaw, 0.08)
+        }
+      }
+    }
+
+    function setupRenderer(){
+      renderer = new THREE.WebGLRenderer({ antialias:true, alpha:false, powerPreference:'high-performance' })
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setSize(window.innerWidth, window.innerHeight)
+      renderer.shadowMap.enabled = true
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.toneMappingExposure = 0.9
+      renderer.physicallyCorrectLights = true
+      renderer.outputColorSpace = THREE.SRGBColorSpace
+      document.body.appendChild(renderer.domElement)
+
+      scene = new THREE.Scene()
+      camera = new THREE.PerspectiveCamera(68, window.innerWidth/window.innerHeight, 0.06, 520)
+
+      controls = new PointerLockControls(camera, renderer.domElement)
+
+      composer = new EffectComposer(renderer)
+      composer.addPass(new RenderPass(scene, camera))
+
+      const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth,window.innerHeight), 0.55, 0.75, 0.20)
+      composer.addPass(bloom)
+
+      const film = new FilmPass(0.18, 0.42, 1100, false)
+      composer.addPass(film)
+
+      const bokeh = new BokehPass(scene, camera, { focus: 22.0, aperture: 0.00007, maxblur: 0.006 })
+      composer.addPass(bokeh)
+
+      const vignette = new ShaderPass(VignetteShader)
+      vignette.uniforms.offset.value = 1.08
+      vignette.uniforms.darkness.value = 1.25
+      composer.addPass(vignette)
+
+      composer.addPass(new OutputPass())
+
+      window.addEventListener('resize', ()=>{
+        camera.aspect = window.innerWidth/window.innerHeight
+        camera.updateProjectionMatrix()
+        renderer.setSize(window.innerWidth, window.innerHeight)
+        composer.setSize(window.innerWidth, window.innerHeight)
+      })
+    }
+
+    function setupPhysics(){
+      const physics = new CANNON.World()
+      physics.gravity.set(0, -9.82, 0)
+      physics.broadphase = new CANNON.SAPBroadphase(physics)
+      physics.allowSleep = true
+      return physics
+    }
+
+    const input = {
+      keys: new Set(),
+      mouseDown:false,
+      blockDown:false
+    }
+
+    function bindInput(){
+      window.addEventListener('keydown', (e)=>{
+        input.keys.add(e.code)
+        if(e.code==='Escape' && STATE.running){
+          pauseGame()
+        }
+      })
+      window.addEventListener('keyup', (e)=>input.keys.delete(e.code))
+      window.addEventListener('mousedown', (e)=>{
+        if(!STATE.running) return
+        if(e.button===0) input.mouseDown = true
+        if(e.button===2) input.blockDown = true
+      })
+      window.addEventListener('mouseup', (e)=>{
+        if(e.button===0) input.mouseDown = false
+        if(e.button===2) input.blockDown = false
+      })
+      window.addEventListener('contextmenu', (e)=>e.preventDefault())
+      window.addEventListener('mousemove', (e)=>{
+        if(!STATE.running) return
+        if(!document.pointerLockElement) return
+        const mx = e.movementX || 0
+        const my = e.movementY || 0
+        const k = 0.0022 * STATE.sens
+        player.look.yaw -= mx*k
+        player.look.pitch -= my*k
+        player.look.pitch = clamp(player.look.pitch, -1.35, 1.25)
+      })
+    }
+
+    function updateWants(){
+      const k = input.keys
+      player.want.f = (k.has('KeyW')?1:0) + (k.has('KeyS')?-1:0)
+      player.want.s = (k.has('KeyD')?1:0) + (k.has('KeyA')?-1:0)
+      player.want.jump = k.has('Space')
+      player.want.run = k.has('ShiftLeft') || k.has('ShiftRight')
+      player.want.crouch = k.has('ControlLeft') || k.has('ControlRight')
+      player.want.attack = input.mouseDown
+      player.want.block = input.blockDown
+      player.want.interact = k.has('KeyE')
+      player.want.stare = k.has('KeyT')
+      player.want.mount = k.has('KeyM')
+    }
+
+    function setupGame(newRun){
+      const save = loadSave()
+      if(newRun || !save){
+        STATE.seed = Math.floor(Math.random()*1e9)
+        STATE.worldShift = 0
+        writeSave({ seed: STATE.seed, worldShift: STATE.worldShift })
+      }else{
+        STATE.seed = save.seed || Math.floor(Math.random()*1e9)
+        STATE.worldShift = save.worldShift || 0
+      }
+      STATE.hasSave = true
+    }
+
+    function setQuality(){
+      const q = STATE.quality
+      const r = clamp(0.55 + q*0.65, 0.5, 1.35)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio*r, 2))
+      const exp = lerp(0.78, 0.98, q)
+      renderer.toneMappingExposure = exp
+    }
+
+    function startGame(forceNew){
+      applyUI()
+      setupGame(forceNew)
+      if(!renderer) setupRenderer()
+      if(!audioSys) audioSys = new AudioSystem()
+      audioSys.start()
+
+      const physics = setupPhysics()
+      world = new World(STATE.seed, STATE.worldShift)
+      world.build(scene, physics)
+
+      player = new Player(physics, world)
+      scene.add(player.sword)
+
+      const horseSaved = (STATE.worldShift % 2)===1
+      if(horseSaved){
+        player.spawnHorse({ scene, physics, world, player })
+      }
+
+      ctx = { scene, physics, world, player, audio: audioSys }
+
+      bindInput()
+      setQuality()
+
+      STATE.running = true
+      STATE.paused = false
+      menu.style.display = 'none'
+      hud.classList.add('show')
+
+      controls.lock()
+      clock.start()
+      loop()
+      whisper('Non parlare. Ascolta.')
+    }
+
+    function pauseGame(){
+      if(!STATE.running) return
+      STATE.paused = true
+      controls.unlock()
+      menu.style.display = 'flex'
+      settingsRow.style.display = 'none'
+      $('#subTitle').textContent = 'Il silenzio non salva. Ma ti permette di respirare.'
+    }
+
+    function resumeGame(){
+      if(!STATE.running) return
+      STATE.paused = false
+      menu.style.display = 'none'
+      controls.lock()
+    }
+
+    menu.addEventListener('click', (e)=>{
+      if(e.target===menu && STATE.running){
+        resumeGame()
+      }
+    })
+
+    let ctx = null
+
+    function stepMoonStare(dt){
+      if(player.want.stare){
+        STATE.staredMoonSec += dt
+      }else{
+        STATE.staredMoonSec = Math.max(0, STATE.staredMoonSec - dt*0.85)
+      }
+      if(STATE.staredMoonSec > 6.5 && !STATE.facelessTriggered){
+        STATE.facelessTriggered = true
+        if(world.faceless){
+          world.faceless.setActive(true)
+          world.faceless.body.position.set(player.body.position.x + 6, player.body.position.y, player.body.position.z - 8)
+          world.faceless.body.wakeUp()
+          whisper('L’Uomo Senza Volto è già qui.')
+        }
+      }
+    }
+
+    function updateSwordTransform(){
+      if(!player || !player.sword) return
+      const base = player.swordWorldTransform()
+      player.sword.position.copy(base)
+      player.sword.rotation.set(0, player.look.yaw, 0)
+      const a = player.attackState
+      const up = new THREE.Vector3(0,1,0)
+      if(a.phase==='charge'){
+        player.sword.rotateZ(lerp(0.35, 0.85, smoothstep(0,0.6,a.t)))
+        player.sword.rotateX(lerp(-0.15, -0.55, smoothstep(0,0.6,a.t)))
+      }else if(a.phase==='swing'){
+        const swing = smoothstep(0,0.28,a.t) - smoothstep(0.28,0.55,a.t)
+        player.sword.rotateY(lerp(-0.65, 0.85, smoothstep(0,0.55,a.t)))
+        player.sword.rotateZ(lerp(0.25, -0.85, smoothstep(0,0.55,a.t)))
+        player.sword.rotateX(lerp(-0.25, 0.15, swing+0.5))
+      }else{
+        player.sword.rotateZ(0.28)
+        player.sword.rotateX(-0.12)
+      }
+      if(player.blockState.active){
+        player.sword.rotateY(0.55)
+        player.sword.rotateX(-0.25)
+      }
+    }
+
+    function updateCamera(){
+      const p = player.body.position
+      camera.position.set(p.x, p.y + player.camOffset.y, p.z)
+      camera.rotation.set(player.look.pitch, player.look.yaw, 0, 'YXZ')
+    }
+
+    function updateHUD(){
+      const v = clamp(player.stamina/player.staminaMax, 0, 1)
+      staminaFill.style.width = (v*100).toFixed(1) + '%'
+      const dim = v<0.22 ? 0.55 : 1
+      staminaFill.style.opacity = dim
+    }
+
+    function applyWorldPhysicsAnchors(){
+      for(const it of world.interactables){
+        if(it.obj.userData.physicsBody){
+          it.obj.userData.physicsBody.position.set(it.obj.position.x, it.obj.position.y, it.obj.position.z)
+        }
+      }
+      const anchor = (o)=>{
+        if(o.userData.physicsBody){
+          o.userData.physicsBody.position.set(o.position.x, o.position.y, o.position.z)
+          o.userData.physicsBody.quaternion.set(o.quaternion.x, o.quaternion.y, o.quaternion.z, o.quaternion.w)
+        }
+      }
+      for(const c of scene.children){
+        if(c && c.userData && c.userData.physicsBody) anchor(c)
+      }
+    }
+
+    function loop(){
+      if(!STATE.running) return
+      requestAnimationFrame(loop)
+      if(STATE.paused) return
+
+      const dt = Math.min(clock.getDelta(), 1/30)
+      const t = clock.elapsedTime
+
+      updateWants()
+      stepMoonStare(dt)
+
+      setQuality()
+
+      const physics = ctx.physics
+      physics.step(1/60, dt, 3)
+
+      applyWorldPhysicsAnchors()
+
+      player.step(dt, t, ctx)
+      for(const e of world.bosses){
+        if(e && e.step) e.step(dt, t, ctx)
+      }
+      if(world.faceless) world.faceless.step(dt, t, ctx)
+
+      const ppos = new THREE.Vector3(player.body.position.x, player.body.position.y, player.body.position.z)
+      world.step(dt, t, ppos, STATE.staredMoonSec)
+
+      if(player.horse) player.horse.step(dt, t, ctx)
+
+      updateSwordTransform()
+      updateCamera()
+      updateHUD()
+
+      const vx = player.body.velocity.x
+      const vz = player.body.velocity.z
+      const sp = Math.sqrt(vx*vx + vz*vz)
+      audioSys.step(dt, sp, STATE.staredMoonSec)
+
+      composer.render()
+    }
+
+    applyUI()
+
+    const initialSave = loadSave()
+    STATE.hasSave = !!initialSave
+    $('#btnContinue').disabled = !STATE.hasSave
+    $('#btnContinue').style.opacity = STATE.hasSave ? '1' : '0.45'
+
+    document.addEventListener('pointerlockchange', ()=>{
+      if(!document.pointerLockElement && STATE.running && !STATE.paused){
+        pauseGame()
+      }
+    })
+
+    document.addEventListener('keydown', (e)=>{
+      if(e.code==='Enter' && STATE.running && STATE.paused){
+        resumeGame()
+      }
+    })
+  </script>
+</body>
+</html>
